@@ -736,6 +736,18 @@ function transcode($string, $charmap) {
 					} elseif($e == 'nyo.beforesub') {
 						$result_syl[] = 'po';
 						$result_syl[] = 'aa';
+					} elseif($e == 'coeng_da') {
+						if(array_key_exists('coeng_da.coeng_ta', $glyphs)) {
+							$result_syl[] = 'coeng_da.coeng_ta';
+						} else {
+							$result_syl[] = 'coeng_ta';
+						}
+					} elseif($e == 'ae') {
+						$result_syl[] = 'e';
+						$result_syl[] = 'samyok-sannya';
+					} elseif($e == 'ai') {
+						$result_syl[] = 'e';
+						$result_syl[] = 'ai.upperpart';
 					} elseif($e == 'qoo2' && ($cursor + 2) < $charCount && $s[$cursor+1] == unichr(0x17d2) && $s[$cursor+2] == unichr(0x1799) && array_key_exists('qoo2|coeng_yo', $ligatures)) {
 						$result_syl[] = $ligatures['qoo2|coeng_yo'];
 						$cursor++;
@@ -771,6 +783,7 @@ function transcode($string, $charmap) {
 				$i = uniord($l);
 				if(array_key_exists($i, $glyphs)) {
 					$result .= $glyphs[$i];
+				} elseif(in_array($i, array(0x200B, 0x200C, 0x200D, 0xFEFF))) { // zero-width characters
 				} else {
 					$result .= unichr(0x96).$l.unichr(0x97);
 				}
