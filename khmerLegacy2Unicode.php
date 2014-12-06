@@ -492,14 +492,8 @@ function transcode($string, $charmap) {
 	$str = htmlspecialchars($str);
 	$str = nl2br($str);
 	$str = str_replace(unichr(0x92).unichr(0x91), '', $str);
-	$str = str_replace(unichr(0x91), '<span class="orn">', $str);
-	$str = str_replace(unichr(0x92), '</span>', $str);
 	$str = str_replace(unichr(0x97).unichr(0x96), '', $str);
-	$str = str_replace(unichr(0x96), '<span class="unk">', $str);
-	$str = str_replace(unichr(0x97), '</span>', $str);
 	$str = str_replace(unichr(0x87).unichr(0x86), '', $str);
-	$str = str_replace(unichr(0x86), '<span class="niu">', $str);
-	$str = str_replace(unichr(0x87), '</span>', $str);
 	$str = reorder($str);
 	return $str;
 }

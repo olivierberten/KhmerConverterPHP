@@ -781,7 +781,9 @@ function transcode($string, $charmap) {
 		} else {
 			foreach($s as $l) {
 				$i = uniord($l);
-				if(array_key_exists($i, $glyphs)) {
+				if(in_array($l, array("\t", "\r", "\n"))) {
+					$result .= $l;
+				} elseif(array_key_exists($i, $glyphs)) {
 					$result .= $glyphs[$i];
 				} elseif(in_array($i, array(0x200B, 0x200C, 0x200D, 0xFEFF))) { // zero-width characters
 				} else {
@@ -791,8 +793,6 @@ function transcode($string, $charmap) {
 		}
 	}
 	$result = str_replace(unichr(0x97).unichr(0x96), '', $result);
-	$result = str_replace(unichr(0x96), '<span class="unk">', $result);
-	$result = str_replace(unichr(0x97), '</span>', $result);
 	return $result;
 }
 ?>
