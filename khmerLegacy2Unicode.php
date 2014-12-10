@@ -489,8 +489,6 @@ function transcode($string, $charmap) {
 		}
 		$cursor++;
 	}
-	$str = htmlspecialchars($str);
-	$str = nl2br($str);
 	$str = str_replace(unichr(0x92).unichr(0x91), '', $str);
 	$str = str_replace(unichr(0x97).unichr(0x96), '', $str);
 	$str = str_replace(unichr(0x87).unichr(0x86), '', $str);
