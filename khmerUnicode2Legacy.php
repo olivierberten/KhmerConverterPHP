@@ -28,40 +28,19 @@
 #
 ########################################################################
 
-function unichr($dec) {
-	if ($dec < 128) {
-		$utf = chr($dec);
-	} else if ($dec < 2048) {
-		$utf = chr(192 + (($dec - ($dec % 64)) / 64));
-		$utf .= chr(128 + ($dec % 64));
-	} else {
-		$utf = chr(224 + (($dec - ($dec % 4096)) / 4096));
-		$utf .= chr(128 + ((($dec % 4096) - ($dec % 64)) / 64));
-		$utf .= chr(128 + ($dec % 64));
-	}
-	return $utf;
-}
-
-function uniord($c) {
-	$ud = 0;
-	if (ord($c{0})>=0 && ord($c{0})<=127)
-		$ud = ord($c{0});
-	if (ord($c{0})>=192 && ord($c{0})<=223)
-		$ud = (ord($c{0})-192)*64 + (ord($c{1})-128);
-	if (ord($c{0})>=224 && ord($c{0})<=239)
-		$ud = (ord($c{0})-224)*4096 + (ord($c{1})-128)*64 + (ord($c{2})-128);
-	if (ord($c{0})>=240 && ord($c{0})<=247)
-		$ud = (ord($c{0})-240)*262144 + (ord($c{1})-128)*4096 + (ord($c{2})-128)*64 + (ord($c{3})-128);
-	if (ord($c{0})>=248 && ord($c{0})<=251)
-		$ud = (ord($c{0})-248)*16777216 + (ord($c{1})-128)*262144 + (ord($c{2})-128)*4096 + (ord($c{3})-128)*64 + (ord($c{4})-128);
-	if (ord($c{0})>=252 && ord($c{0})<=253)
-		$ud = (ord($c{0})-252)*1073741824 + (ord($c{1})-128)*16777216 + (ord($c{2})-128)*262144 + (ord($c{3})-128)*4096 + (ord($c{4})-128)*64 + (ord($c{5})-128);
-	if (ord($c{0})>=254 && ord($c{0})<=255) //error
-		$ud = false;
-	return $ud;
-}
-
 # This module reorders unicode string according to unicode order
+
+if(!function_exists('unichr')) {
+	function unichr($u, $encoding = 'UTF-8') {
+		return mb_convert_encoding('&#' . intval($u) . ';', $encoding, 'HTML-ENTITIES');
+	}
+
+	function uniord( $string , $encoding = 'UTF-8' )
+	{
+		$entity = mb_encode_numericentity($string, array(0x0, 0xffff, 0, 0xffff), $encoding);
+		return preg_replace('`^&#([0-9]+);.*$`', '\\1', $entity);
+	}
+}
 
 # important character to test in order to form a cluster
 define("SRAAA", unichr(0x17B6));
@@ -591,6 +570,7 @@ $rChar2glyphs = array(
 		unichr(0x17b8) => 'ii.higher',      // KHMER VOWEL SIGN II (raised)
 		unichr(0x17b9) => 'y.higher',       // KHMER VOWEL SIGN Y (raised)
 		unichr(0x17ba) => 'yy.higher',      // KHMER VOWEL SIGN YY (raised)
+		unichr(0x17c5) => 'au',             // KHMER VOWEL SIGN AU
 		unichr(0x17c6) => 'nikahit.higher', // KHMER SIGN NIKAHIT (raised)
 		unichr(0x17c9) => 'u',              // KHMER SIGN MUUSIKATOAN (subscript)
 		unichr(0x17ca) => 'u',              // KHMER SIGN TRIISAP (subscript)
@@ -674,7 +654,11 @@ $rChar2glyphs = array(
 );
 
 function cmp($a, $b) {
-	return substr_count($a,'|') < substr_count($b,'|');
+	if(substr_count($a,'|') == substr_count($b,'|')) {
+		return strlen($a) < strlen($b);
+	} else {
+		return substr_count($a,'|') < substr_count($b,'|');
+	}
 }
 
 function transcode($string, $charmap) {
@@ -685,6 +669,7 @@ function transcode($string, $charmap) {
 	uksort($ligatures, "cmp");
 
 	$reorder = reorder($string);
+	//print_r($reorder);
 	foreach($reorder as $syl) {
 		$s = preg_split('//u', $syl, -1, PREG_SPLIT_NO_EMPTY);
 		$result_syl = array();
@@ -702,71 +687,121 @@ function transcode($string, $charmap) {
 							$e = 'coeng';
 					}
 					$v = array('ry' => 'ba', 'ly' => 'po');
-					if(array_key_exists($e, $glyphs)) {
+					if(array_key_exists($e, $glyphs) || ($e == 'coeng_nyo.undernyo' && array_key_exists('nyo.beforesub|coeng_nyo.undernyo', $ligatures))) {
 						$result_syl[] = $e;
-					} elseif($e == 'au' && array_key_exists('au.upperpart', $glyphs)) {
+					} elseif($e == 'qaq' && array_key_exists('qa', $glyphs)) {
+						$result_syl[] = 'qa';
+					} elseif($e == 'qaa' && array_key_exists('qa', $glyphs) && array_key_exists('aa', $glyphs)) {
+						$result_syl[] = 'qa';
+						$result_syl[] = 'aa';
+					} elseif($e == 'au' && array_key_exists('aa', $glyphs) && array_key_exists('au.upperpart', $glyphs)) {
 						$result_syl[] = 'aa';
 						$result_syl[] = 'au.upperpart';
-					} elseif(in_array($e, array('ry', 'ly'))) {
-						if(array_key_exists('ry.subpart', $glyphs)) {
-							$result_syl[] = $v[$e];
-							$result_syl[] = 'ry.subpart';
-						} else {
-							$result_syl[] = $v[$e];
-							$result_syl[] = 'coeng_nyo';
-						}
-					} elseif(in_array($e, array('ryy', 'lyy'))) {
+					} elseif(in_array($e, array('ry', 'ly')) && array_key_exists('ry.subpart', $glyphs)) {
+						$result_syl[] = $v[$e];
+						$result_syl[] = 'ry.subpart';
+					} elseif(in_array($e, array('ry', 'ly')) && array_key_exists('coeng_nyo', $glyphs)) {
+						$result_syl[] = $v[$e];
+						$result_syl[] = 'coeng_nyo';
+					} elseif(in_array($e, array('ryy', 'lyy')) && array_key_exists('ryy.subpart', $glyphs)) {
 						$result_syl[] = $v[substr($e, 0, 2)];
 						$result_syl[] = 'ryy.subpart';
-					} elseif($e == 'qai') {
+					} elseif($e == 'qai' && array_key_exists('po', $glyphs) && array_key_exists('coeng_tho', $glyphs)) {
 						$result_syl[] = 'po';
 						$result_syl[] = 'coeng_tho';
-					} elseif($e == 'la') {
+					} elseif($e == 'la' && array_key_exists('to', $glyphs) && array_key_exists('la.secondhalf', $glyphs)) {
 						$result_syl[] = 'to';
 						$result_syl[] = 'la.secondhalf';
-					} elseif($e == 'nyo') {
-						if(array_key_exists('nyo.beforesub', $glyphs)) {
-							$result_syl[] = 'nyo.beforesub';
-							$result_syl[] = 'coeng_nyo';
-						} else {
-							$result_syl[] = 'po';
-							$result_syl[] = 'aa';
-							$result_syl[] = 'coeng_nyo';
-						}
-					} elseif($e == 'nyo.beforesub') {
+					} elseif($e == 'la' && array_key_exists('to', $glyphs) && array_key_exists('coeng_ba', $glyphs)) {
+						$result_syl[] = 'to';
+						$result_syl[] = 'coeng_ba';
+					} elseif($e == 'nyo' && array_key_exists('nyo.beforesub', $glyphs) && array_key_exists('coeng_nyo', $glyphs)) {
+						$result_syl[] = 'nyo.beforesub';
+						$result_syl[] = 'coeng_nyo';
+					} elseif($e == 'nyo' && array_key_exists('po', $glyphs) && array_key_exists('aa', $glyphs) && array_key_exists('coeng_nyo', $glyphs)) {
 						$result_syl[] = 'po';
 						$result_syl[] = 'aa';
-					} elseif($e == 'coeng_da') {
-						if(array_key_exists('coeng_da.coeng_ta', $glyphs)) {
-							$result_syl[] = 'coeng_da.coeng_ta';
-						} else {
-							$result_syl[] = 'coeng_ta';
-						}
-					} elseif($e == 'ae') {
+						$result_syl[] = 'coeng_nyo';
+					} elseif($e == 'nyo.beforesub' && array_key_exists('po', $glyphs) && array_key_exists('aa', $glyphs)) {
+						$result_syl[] = 'po';
+						$result_syl[] = 'aa';
+					} elseif($e == 'coeng_da' && array_key_exists('coeng_da.coeng_ta', $glyphs)) {
+						$result_syl[] = 'coeng_da.coeng_ta';
+					} elseif($e == 'coeng_da' && array_key_exists('coeng_ta', $glyphs)) {
+						$result_syl[] = 'coeng_ta';
+					} elseif($e == 'ae' && array_key_exists('e', $glyphs) && array_key_exists('samyok-sannya', $glyphs)) {
 						$result_syl[] = 'e';
 						$result_syl[] = 'samyok-sannya';
-					} elseif($e == 'ai') {
+					} elseif($e == 'ai' && array_key_exists('e', $glyphs) && array_key_exists('ai.upperpart', $glyphs)) {
 						$result_syl[] = 'e';
 						$result_syl[] = 'ai.upperpart';
+					} elseif($e == 'qau' && array_key_exists('quuv', $glyphs)) {
+						$result_syl[] = 'quuv';
+					} elseif($e == 'camnuc-pii-kuuh' && array_key_exists('divide', $glyphs)) { # !!! NOT WORKING
+						$result_syl[] = 'divide';
+					} elseif($e == 'yuukaleapintu' && array_key_exists('colon', $glyphs)) { # !!! NOT WORKING
+						$result_syl[] = 'colon';
 					} elseif($e == 'qoo2' && ($cursor + 2) < $charCount && $s[$cursor+1] == unichr(0x17d2) && $s[$cursor+2] == unichr(0x1799) && array_key_exists('qoo2|coeng_yo', $ligatures)) {
 						$result_syl[] = $ligatures['qoo2|coeng_yo'];
 						$cursor++;
 						$cursor++;
+					} elseif(array_key_exists($e.'.lower', $glyphs)) {
+						$result_syl[] = $e.'.lower';
+					} elseif(array_key_exists($e.'.higher', $glyphs)) {
+						$result_syl[] = $e.'.higher';
+					} elseif(substr($e, 0, 6) == 'coeng_') {
+						$result_syl[] .= '*'.$s[$cursor-1].$s[$cursor];
+					} elseif(count($s) == $cursor) { # broken coeng
+						$result_syl[] .= '*'.$s[$cursor - 1];
 					} else {
-						$result .= unichr(0x96).$s[$cursor].unichr(0x97);
+						$result_syl[] .= '*'.$s[$cursor];
 					}
 				}
 				$cursor++;
 			}
+			//print_r($result_syl);
 			$result_syl = implode('|', $result_syl);
-			foreach($ligatures as $k => $v) $result_syl = str_replace($k, $v, $result_syl);
+			if(strpos($result_syl, 'po|aa|coeng_nyo.undernyo') !== false && array_key_exists('nyo.beforesub|coeng_nyo.undernyo', $ligatures)) {
+				$result_syl = str_replace('po|aa|coeng_nyo.undernyo', 'nyo.beforesub|coeng_nyo.undernyo', $result_syl);
+			}
+			foreach($ligatures as $k => $v) {
+				$result_syl = str_replace('|'.$k.'|', '|'.$v.'|', $result_syl);
+				if(substr($result_syl, 0, strlen($k)+1) === $k.'|') {
+					$result_syl = $v.substr($result_syl, strlen($k));
+				}
+				if(substr($result_syl, -strlen($k)-1) === '|'.$k) {
+					$result_syl = substr($result_syl, 0, -strlen($k)).$v;
+				}
+				if($result_syl === $k) {
+					$result_syl = $v;
+				}
+			}
 			$result_syl = explode('|', $result_syl);
+			//print_r($result_syl);
 			$found_aa = array_search('aa', $result_syl);
 			$found_au = array_search('au', $result_syl);
 			if($found_aa || $found_au) {
 				for($i = max($found_aa, $found_au) - 1; $i >= 0; $i--) {
 					if(array_key_exists($result_syl[$i].'.liga', $glyphs)) {
 						$result_syl[$i] = $result_syl[$i].'.liga';
+						if($found_aa && array_key_exists('aa.liga', $glyphs)) {
+							$result_syl[$found_aa] = 'aa.liga';
+						} elseif($found_au && array_key_exists('au.liga', $glyphs)) {
+							$result_syl[$found_au] = 'au.liga';
+						}
+						break;
+					}
+				}
+			}
+			//TODO: ligature glyphs + coeng shifted after aa/au ligature
+			$found_i = array_search('i', $result_syl);
+			$found_ii = array_search('ii', $result_syl);
+			$found_y = array_search('y', $result_syl);
+			$found_yy = array_search('yy', $result_syl);
+			if($found_i || $found_ii || $found_y || $found_yy) {
+				for($i = max($found_i, $found_ii, $found_y, $found_yy) - 1; $i >= 0; $i--) {
+					if(array_key_exists($result_syl[$i].'.hairless', $glyphs)) {
+						$result_syl[$i] = $result_syl[$i].'.hairless';
 						break;
 					}
 				}
@@ -774,11 +809,19 @@ function transcode($string, $charmap) {
 			foreach($result_syl as $r) {
 				if(is_numeric($r)) {
 					$result .= unichr($r);
+				} elseif(substr($r, 0, 1) == '*') {
+					if(substr($r, 1) == '្') {
+						$rn = '◌្';
+					} else {
+						$rn = substr($r, 1);
+					}
+					$result .= unichr(0x96).$rn.unichr(0x97);
 				} else {
 					$result .= $glyphs[$r];
 				}
 			}
 		} else {
+			//print_r($s);
 			foreach($s as $l) {
 				$i = uniord($l);
 				if(in_array($l, array("\t", "\r", "\n"))) {
